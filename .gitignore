@@ -1,0 +1,62 @@
+# ── Java / Maven ──────────────────────────────────────────────────────────────
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# ── Spring Boot ───────────────────────────────────────────────────────────────
+HELP.md
+spring-shell.log
+
+# ── IDE — IntelliJ IDEA ───────────────────────────────────────────────────────
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# ── IDE — VS Code ────────────────────────────────────────────────────────────
+.vscode/
+*.code-workspace
+
+# ── IDE — Eclipse ────────────────────────────────────────────────────────────
+.project
+.classpath
+.settings/
+bin/
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# ── Docker ───────────────────────────────────────────────────────────────────
+# Keep Dockerfile and docker-compose.yml tracked; ignore local override files
+docker-compose.override.yml
+
+# ── Ops / backups ────────────────────────────────────────────────────────────
+backups/
+*.backup.json
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Environment / secrets ─────────────────────────────────────────────────────
+.env
+application-local.properties
+application-local.yml
+
+# ── Frontend (Phase 2) ───────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/.next/
+frontend/dist/
+frontend/.env.local
