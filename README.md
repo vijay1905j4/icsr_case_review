@@ -1,56 +1,82 @@
 # ICSR Case Review — Backend
 
-A Spring Boot service that powers pharmacovigilance case review. Accepts AI-extracted case data, merges follow-up updates with diff annotations, and surfaces reviewer queries.
+Spring Boot service for pharmacovigilance case review. Merges AI-extracted follow-up data onto a stored case and annotates every field with a diff status.
 
 ---
 
-## Prerequisites
+## Quick start
 
-| Tool | Version | Notes |
-|---|---|---|
-| Java | 21 | Set `JAVA_HOME` to JDK 21 |
-| Maven | 3.9+ | Available at `~/.m2/wrapper/dists/` or install separately |
-
----
-
-## Running Locally
+**Prerequisites:** Java 21, Maven 3.9+
 
 ```bash
 cd backend
-
-# If mvn is on PATH:
 mvn spring-boot:run
-
-# Windows — full path if mvn is not on PATH:
-$env:JAVA_HOME = "C:\Program Files\Java\jdk-21"
-& "C:\Users\<you>\.m2\wrapper\dists\apache-maven-3.9.11-bin\...\bin\mvn.cmd" spring-boot:run
 ```
 
-Service starts on **http://localhost:8080**. First run downloads Maven plugin artifacts (~30s); subsequent starts are ~2s.
+Service starts on **http://localhost:8080** in ~2 seconds.  
+First run downloads Maven plugin dependencies (~30 s one-time cost).
 
----
-
-## Verifying the Service is Healthy
+Verify it's up:
 
 ```bash
 curl http://localhost:8080/health
-# → {"status":"UP"}
+# {"status":"UP"}
+```
+
+Run tests:
+
+```bash
+mvn test
 ```
 
 ---
 
-## API — curl Examples
+## Endpoints
 
-> **Note:** The bootstrap case ID is `PV-2026-0451`. POST endpoints require `Content-Type: application/json`.
+### 1 — Health check
 
-### 1. Get a case
 ```bash
-curl -s http://localhost:8080/cases/PV-2026-0451
+curl http://localhost:8080/health
 ```
 
-### 2. Post a follow-up (merge + diff annotations)
+```json
+{"status":"UP"}
+```
+
+---
+
+### 2 — Get a case
+
 ```bash
-curl -s -X POST http://localhost:8080/cases/PV-2026-0451/follow-ups \
+curl http://localhost:8080/cases/PV-2026-0451
+```
+
+```json
+{
+  "case_id": "PV-2026-0451",
+  "version": 1,
+  "case_classification": "non-significant",
+  "extracted_at": "2026-04-08T09:14:00Z",
+  "source_document": "initial_report_PV-2026-0451.pdf",
+  "sections": {
+    "patient": {
+      "age":      { "value": "62",   "confidence": 0.91, "source": "p.2 §1" },
+      "initials": { "value": "M.K.", "confidence": 0.98, "source": "p.2 §1" }
+    }
+  }
+}
+```
+
+Returns 404 with error body if `caseId` is not found.
+
+---
+
+### 3 — Post a follow-up (merge)
+
+Every field in the response carries a `merge` annotation.
+
+```bash
+curl -X POST http://localhost:8080/cases/PV-2026-0451/follow-ups \
   -H "Content-Type: application/json" \
   -d '{
     "case_id": "PV-2026-0451",
@@ -71,94 +97,124 @@ curl -s -X POST http://localhost:8080/cases/PV-2026-0451/follow-ups \
   }'
 ```
 
-### 3. Raise a reviewer query on a field
+```json
+{
+  "case_id": "PV-2026-0451",
+  "version": 2,
+  "case_classification": "significant",
+  "extracted_at": "2026-04-15T11:00:00Z",
+  "source_document": "followup_report_PV-2026-0451.pdf",
+  "missing_fields": ["patient.weight_kg"],
+  "sections": {
+    "patient": {
+      "initials": {
+        "value": "M.K.", "confidence": 0.98, "source": "p.2 §1",
+        "merge": { "status": "unchanged" }
+      },
+      "age": {
+        "value": "63", "confidence": 0.95, "source": "p.2 §1",
+        "merge": { "status": "overridden", "previous_value": "62" }
+      },
+      "weight_kg": {
+        "value": "78", "confidence": 0.85, "source": "p.3 §2",
+        "merge": { "status": "retained" }
+      }
+    },
+    "adverse_event": {
+      "hospitalization": {
+        "value": "Yes", "confidence": 0.91, "source": "p.4 §3",
+        "merge": { "status": "new" }
+      }
+    }
+  }
+}
+```
+
+| `merge.status` | Meaning |
+|---|---|
+| `unchanged` | AI re-extracted; value matches stored |
+| `overridden` | AI re-extracted; value changed — `previous_value` holds the old value |
+| `new` | Field absent from stored version |
+| `retained` | Field absent from follow-up — stored value preserved, not dropped |
+
+---
+
+### 4 — Raise a reviewer query
+
 ```bash
-curl -s -X POST http://localhost:8080/queries \
+curl -X POST http://localhost:8080/queries \
   -H "Content-Type: application/json" \
   -d '{
-    "case_id": "PV-2026-0451",
+    "case_id":    "PV-2026-0451",
     "field_path": "adverse_event.onset_date",
-    "question": "The onset date changed between versions — can you confirm which is correct?"
+    "question":   "Onset date changed between versions — which is correct?"
   }'
 ```
 
-### 4. List all queries for a case
+```json
+{
+  "query_id":   "fa5add47-5923-4267-a138-cef25ffc2563",
+  "case_id":    "PV-2026-0451",
+  "field_path": "adverse_event.onset_date",
+  "question":   "Onset date changed between versions — which is correct?",
+  "created_at": "2026-04-15T11:05:00Z"
+}
+```
+
+Returns `201 Created`. Returns 400 if any field is blank, 404 if `caseId` does not exist.
+
+---
+
+### 5 — List queries for a case
+
 ```bash
-curl -s "http://localhost:8080/queries?caseId=PV-2026-0451"
+curl "http://localhost:8080/queries?caseId=PV-2026-0451"
+```
+
+```json
+[
+  {
+    "query_id":   "fa5add47-5923-4267-a138-cef25ffc2563",
+    "case_id":    "PV-2026-0451",
+    "field_path": "adverse_event.onset_date",
+    "question":   "Onset date changed between versions — which is correct?",
+    "created_at": "2026-04-15T11:05:00Z"
+  }
+]
+```
+
+Returns 400 if `caseId` param is omitted, 404 if the case does not exist.
+
+---
+
+## Error responses
+
+All errors use the same shape:
+
+```json
+{
+  "status":    404,
+  "error":     "NOT_FOUND",
+  "message":   "Case not found: PV-XXXX",
+  "path":      "/cases/PV-XXXX",
+  "timestamp": "2026-04-15T11:05:00Z"
+}
 ```
 
 ---
 
-## Merge Behaviour
-
-When a follow-up is POSTed, every field in the merged response carries a `merge` annotation:
-
-| `status` | When |
-|---|---|
-| `unchanged` | AI re-extracted; value matches stored version |
-| `overridden` | AI re-extracted; value differs — `previous_value` included |
-| `new` | Field present in follow-up but absent from stored version |
-| `retained` | Field absent from follow-up — stored value preserved as-is |
-
-Fields absent from the follow-up are **retained** (not dropped). A follow-up is a partial re-extraction, not a replacement. See `DESIGN.md` for full reasoning.
-
----
-
-## Project Structure
+## Project layout
 
 ```
 backend/
 ├── pom.xml
-└── src/
-    ├── main/java/com/theragenx/icsr/
-    │   ├── IcsrApplication.java
-    │   ├── config/          # Jackson config
-    │   ├── controller/      # HTTP layer (CaseController, QueryController, HealthController)
-    │   ├── exception/       # CaseNotFoundException → 404
-    │   ├── model/           # Java records: Case, AnnotatedField, MergeAnnotation, Query
-    │   ├── service/         # MergeService, QueryService
-    │   └── store/           # In-memory CaseStore, QueryStore (ConcurrentHashMap)
-    └── main/resources/
-        ├── application.properties
-        └── case_v1.json     # Bootstrap data loaded on startup
+└── src/main/java/com/theragenx/icsr/
+    ├── controller/   # HTTP routing, input validation
+    ├── service/      # MergeService, QueryService
+    ├── model/        # Java records: Case, AnnotatedField, MergeAnnotation, Query
+    ├── store/        # In-memory CaseStore + QueryStore (ConcurrentHashMap)
+    ├── exception/    # CaseNotFoundException, GlobalExceptionHandler
+    └── config/       # Jackson config (snake_case, NON_NULL, ISO dates)
 ```
 
----
-
-## Running Tests
-
-```bash
-mvn test
-```
-
-Tests live in `src/test/java/com/theragenx/icsr/service/MergeServiceTest.java` and cover all four merge status cases.
-
----
-
-## Operations
-
-> See [Operations Runbook](#operations-runbook) below — to be expanded in Phase 1B with Docker, backup/restore, and ops scripts.
-
-### Operations Runbook
-
-**Build and start**
-```bash
-# Phase 1B: docker-compose up --build
-# Phase 1A: mvn spring-boot:run (see above)
-```
-
-**Verify healthy**
-```bash
-curl http://localhost:8080/health
-```
-
-**Debug a failed startup**
-1. Check `JAVA_HOME` points to JDK 21 — not JDK 25 or 8
-2. Confirm port 8080 is free: `netstat -ano | findstr :8080`
-3. Check `src/main/resources/case_v1.json` is on the classpath (exists in `target/classes/`)
-
-**What to check first if requests are failing**
-1. `GET /health` — confirms the process is alive
-2. Check the request `Content-Type: application/json` header is set for POST endpoints
-3. Confirm `caseId` in the URL matches `case_id` in the JSON body for follow-ups
-4. Look for `UnsupportedOperationException` in logs — means an endpoint stub hasn't been implemented yet
+State is in-memory only. A restart reseeds from `src/main/resources/case_v1.json`.
