@@ -13,8 +13,10 @@ import java.util.List;
 /**
  * Handles reviewer query creation and listing.
  *
- * POST /queries              → create a new query
- * GET  /queries?caseId={id} → list queries for a case
+ * <pre>
+ * POST /queries              → create a query (body: {caseId, fieldPath, question})
+ * GET  /queries?caseId={id} → list all queries for the given case
+ * </pre>
  */
 @RestController
 @RequestMapping("/queries")
@@ -28,22 +30,32 @@ public class QueryController {
 
     /**
      * Creates a reviewer query against a specific field.
-     * 400 if body fails validation. 404 if caseId does not exist.
+     * Returns 201 Created with the persisted query (including server-assigned id and timestamp).
+     *
+     * <p>Validations (via {@link Valid} + {@link GlobalExceptionHandler}):
+     * <ul>
+     *   <li>400 — caseId, fieldPath, or question blank or missing</li>
+     *   <li>404 — caseId does not exist</li>
+     * </ul>
      */
     @PostMapping
     public ResponseEntity<Query> createQuery(@RequestBody @Valid CreateQueryRequest request) {
-        // TODO: Query created = queryService.createQuery(request);
-        //       return ResponseEntity.status(HttpStatus.CREATED).body(created);
-        throw new UnsupportedOperationException("TODO: createQuery");
+        Query created = queryService.createQuery(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
     /**
-     * Lists all queries for the given case, in creation order.
-     * 404 if caseId does not exist.
+     * Lists all queries for the given case in creation order.
+     *
+     * <p>Validations:
+     * <ul>
+     *   <li>400 — {@code caseId} param is missing entirely</li>
+     *   <li>404 — caseId does not exist in the store</li>
+     * </ul>
      */
     @GetMapping
     public ResponseEntity<List<Query>> listQueries(@RequestParam String caseId) {
-        // TODO: return ResponseEntity.ok(queryService.listQueries(caseId));
-        throw new UnsupportedOperationException("TODO: listQueries");
+        return ResponseEntity.ok(queryService.listQueries(caseId));
     }
 }
+

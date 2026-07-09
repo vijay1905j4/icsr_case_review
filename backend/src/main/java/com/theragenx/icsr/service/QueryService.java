@@ -1,16 +1,19 @@
 package com.theragenx.icsr.service;
 
+import com.theragenx.icsr.exception.CaseNotFoundException;
 import com.theragenx.icsr.model.CreateQueryRequest;
 import com.theragenx.icsr.model.Query;
 import com.theragenx.icsr.store.CaseStore;
 import com.theragenx.icsr.store.QueryStore;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Query service: creates and retrieves reviewer queries.
- * Validates that the target caseId exists before persisting.
+ * Always verifies the target case exists before reading or writing queries.
  */
 @Service
 public class QueryService {
@@ -24,24 +27,38 @@ public class QueryService {
     }
 
     /**
-     * Creates a new query, assigning a UUID and timestamp.
+     * Creates a new query, assigning a UUID and UTC timestamp.
      *
-     * @throws com.theragenx.icsr.exception.CaseNotFoundException if caseId does not exist
+     * @throws CaseNotFoundException if the caseId does not exist in the store
      */
     public Query createQuery(CreateQueryRequest request) {
-        // TODO: verify caseStore.findById(request.caseId()).isPresent() else throw 404
-        //       build Query with UUID.randomUUID(), Instant.now()
-        //       queryStore.save(query); return query
-        throw new UnsupportedOperationException("TODO: createQuery");
+        // Guard: reject queries against non-existent cases.
+        caseStore.findById(request.caseId())
+                .orElseThrow(() -> new CaseNotFoundException(request.caseId()));
+
+        Query query = new Query(
+                UUID.randomUUID().toString(),
+                request.caseId(),
+                request.fieldPath(),
+                request.question(),
+                Instant.now()
+        );
+
+        queryStore.save(query);
+        return query;
     }
 
     /**
-     * Returns all queries for the given case, in creation order.
+     * Returns all queries for the given case in creation order.
      *
-     * @throws com.theragenx.icsr.exception.CaseNotFoundException if caseId does not exist
+     * @throws CaseNotFoundException if the caseId does not exist in the store
      */
     public List<Query> listQueries(String caseId) {
-        // TODO: verify case exists, then return queryStore.findByCaseId(caseId)
-        throw new UnsupportedOperationException("TODO: listQueries");
+        // Guard: distinguish "case exists with no queries" from "case does not exist".
+        caseStore.findById(caseId)
+                .orElseThrow(() -> new CaseNotFoundException(caseId));
+
+        return queryStore.findByCaseId(caseId);
     }
 }
+

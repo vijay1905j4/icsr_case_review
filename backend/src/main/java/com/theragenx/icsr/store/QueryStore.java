@@ -10,20 +10,32 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * In-memory query store. Keyed by caseId; each case may have many queries.
+ * Queries are append-only and returned in insertion order.
  */
 @Component
 public class QueryStore {
 
-    // caseId -> ordered list of queries
+    // caseId → ordered list of queries (list itself is synchronised)
     private final ConcurrentHashMap<String, List<Query>> queries = new ConcurrentHashMap<>();
 
+    /** Appends a query to the list for its case. Thread-safe via synchronised list. */
     public void save(Query query) {
-        // TODO: queries.computeIfAbsent(query.caseId(), k -> new ArrayList<>()).add(query)
-        throw new UnsupportedOperationException("TODO: save");
+        queries.computeIfAbsent(
+                query.caseId(),
+                k -> Collections.synchronizedList(new ArrayList<>())
+        ).add(query);
     }
 
+    /** Returns all queries for the given case in insertion order. Never null. */
     public List<Query> findByCaseId(String caseId) {
-        // TODO: return Collections.unmodifiableList(queries.getOrDefault(caseId, List.of()))
-        throw new UnsupportedOperationException("TODO: findByCaseId");
+        List<Query> found = queries.get(caseId);
+        if (found == null) {
+            return List.of();
+        }
+        // Snapshot under the list's own lock to avoid ConcurrentModificationException.
+        synchronized (found) {
+            return List.copyOf(found);
+        }
     }
 }
+
