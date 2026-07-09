@@ -119,12 +119,20 @@ cmd_stop() {
 cmd_test() {
   require_docker
   echo "→ Running Maven test suite in a throwaway container ..."
-  # Mount the host Maven cache read-only to avoid re-downloading all dependencies.
+
+  # Mount the host Maven cache read-only so Maven does not re-download
+  # the entire dependency graph on every test run.
+  # HOME may be unset in cron or restricted environments; check before using it.
+  local m2_mount=()
+  if [ -n "${HOME:-}" ] && [ -d "${HOME}/.m2" ]; then
+    m2_mount=("--volume" "${HOME}/.m2:/root/.m2:ro")
+  fi
+
   # The container is removed automatically after the tests complete (--rm).
   docker run \
     --rm \
     --volume "${BACKEND_DIR}:/workspace" \
-    --volume "${HOME}/.m2:/root/.m2:ro" \
+    "${m2_mount[@]:-}" \
     --workdir /workspace \
     "maven:3.9-eclipse-temurin-21" \
     mvn test --batch-mode
@@ -160,8 +168,10 @@ cmd_backup() {
 
   echo "→ Snapshotting case state from running service ..."
 
-  # -s silences progress; -f fails on HTTP error codes; redirect stdout to file.
-  if ! curl -sf "${SERVICE_URL}/cases/${CASE_ID}" > "${backup_file}"; then
+  # --fail:     treat HTTP errors as failures
+  # --silent:   suppress progress meter
+  # --max-time: abort if the service stalls rather than hanging indefinitely
+  if ! curl --fail --silent --max-time 10 "${SERVICE_URL}/cases/${CASE_ID}" > "${backup_file}"; then
     rm -f "${backup_file}"
     die "Could not reach the service at ${SERVICE_URL}. Is it running? Try: ops/run.sh start"
   fi
@@ -181,6 +191,16 @@ cmd_restore() {
 
   if [ ! -f "${backup_file}" ]; then
     die "Backup file not found: ${backup_file}"
+  fi
+
+  # Validate the backup is parseable JSON before overwriting the seed file.
+  # Without this check, a corrupt or partial file (e.g. an HTML error page)
+  # would silently replace case_v1.json and break the next startup.
+  if ! command -v jq > /dev/null 2>&1; then
+    die "jq is required for validation but is not installed. Aborting to protect the seed file."
+  fi
+  if ! jq -e . "${backup_file}" > /dev/null 2>&1; then
+    die "Backup file is not valid JSON — refusing to overwrite seed file: ${backup_file}"
   fi
 
   echo "→ Restoring seed file from: ${backup_file} ..."
