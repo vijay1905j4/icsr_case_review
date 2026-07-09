@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -37,9 +38,10 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleValidation(
             MethodArgumentNotValidException ex, HttpServletRequest req) {
 
-        // Join all field-level messages into one readable sentence.
+        // Include the field name so the caller knows exactly which JSON field failed.
+        // e.g. "case_id: must not be blank; question: must not be blank"
         String message = ex.getBindingResult().getFieldErrors().stream()
-                .map(FieldError::getDefaultMessage)
+                .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
                 .collect(Collectors.joining("; "));
 
         return ResponseEntity.badRequest()
@@ -74,11 +76,14 @@ public class GlobalExceptionHandler {
             ResponseStatusException ex, HttpServletRequest req) {
 
         int code = ex.getStatusCode().value();
+        // getReason() is null when ResponseStatusException is thrown without a reason string;
+        // fall back to getMessage() so the error body never has "message": null.
+        String reason = Objects.requireNonNullElse(ex.getReason(), ex.getMessage());
         return ResponseEntity.status(ex.getStatusCode())
                 .body(error(code, HttpStatus.resolve(code) != null
                         ? HttpStatus.resolve(code).name()
                         : "ERROR",
-                        ex.getReason(), req));
+                        reason, req));
     }
 
     // ── Helper ─────────────────────────────────────────────────────────────────

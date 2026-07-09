@@ -12,10 +12,5 @@ public record AnnotatedField(
         String value,
         double confidence,
         String source,
-        MergeAnnotation merge   // null for stored/bootstrapped cases
-) {
-    /** Build a stored field with no merge annotation. */
-    public static AnnotatedField stored(String value, double confidence, String source) {
-        return new AnnotatedField(value, confidence, source, null);
-    }
-}
+        MergeAnnotation merge   // null for stored/bootstrapped cases; always set on merged responses
+) {}
