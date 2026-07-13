@@ -1,0 +1,42 @@
+# ─── Java / Maven ────────────────────────────────────────────────────────────
+backend/target/
+!backend/target/.gitkeep
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+*.zip          # compiled artifacts (NOT the session zip at root — see below)
+hs_err_pid*
+replay_pid*
+
+# ─── Spring Boot dev-tools restart trigger ───────────────────────────────────
+.spring-boot-devtools.properties
+
+# ─── IDEs ────────────────────────────────────────────────────────────────────
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+*.swp
+*.swo
+*~
+
+# ─── OS noise ────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Docker ──────────────────────────────────────────────────────────────────
+# (docker-compose.yml and Dockerfile ARE committed; ignore local override)
+docker-compose.override.yml
+
+# ─── Backup files produced by ops/backup.sh ──────────────────────────────────
+backups/
+
+# ─── Antigravity / AI agent scratch ─────────────────────────────────────────
+.gemini/
+
+# ─── Local session zip (pre-existing session archive at repo root) ───────────
+icsr_session_bc79ef15.zip
