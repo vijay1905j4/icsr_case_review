@@ -1,6 +1,6 @@
 # ICSR Case Review — Backend
 
-Spring Boot service for pharmacovigilance case review. Merges AI-extracted follow-up data onto a stored case and annotates every field with a diff status.
+Spring Boot service for pharmacovigilance case review. Merges AI-extracted follow-up data onto a stored case and annotates every field with a diff removed status.
 
 ---
 
